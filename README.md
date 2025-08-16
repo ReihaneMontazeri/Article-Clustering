@@ -182,5 +182,5 @@ nltk.download('wordnet')
 
 ## Author
 
-Reihan – Machine Learning & Data Science Enthusiast
+Reihane Montazeri – Machine Learning & Data Science Enthusiast
 
