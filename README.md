@@ -1,183 +1,161 @@
-# SMS Spam Detection using Stacking Ensemble & Meta Features
+# Wikipedia Article Clustering using TF-IDF, Sentence Embeddings, and Various Clustering Algorithms
 
-This project implements an advanced SMS spam detection system using a **stacking ensemble** of multiple classifiers, enriched with **meta-features** and **TF-IDF-based text features**. The pipeline also incorporates feature selection and hyperparameter tuning via GridSearchCV.
+This project explores clustering techniques on a set of Wikipedia articles to find natural groupings based on content similarity. Two approaches are implemented:
+
+1. **Silhouette-Driven Clustering** – Evaluates multiple algorithms and hyperparameters to select the clustering with the highest silhouette score.  
+2. **Best Possible Clustering Approach** – Focuses on specific methods (Agglomerative Clustering, K-Means with embeddings) to achieve optimal clustering performance.
 
 ---
 
 ## Table of Contents
 1. [Dataset](#dataset)
 2. [Data Preprocessing](#data-preprocessing)
-3. [Feature Engineering](#feature-engineering)
-4. [Base Learners](#base-learners)
-5. [Stacking Ensemble](#stacking-ensemble)
-6. [Pipeline & GridSearchCV](#pipeline--gridsearchcv)
-7. [Evaluation](#evaluation)
-8. [Usage](#usage)
-9. [Dependencies](#dependencies)
+3. [Approach 1: Silhouette-Driven Clustering](#approach-1-silhouette-driven-clustering)
+4. [Approach 2: Best Possible Clustering](#approach-2-best-possible-clustering)
+5. [Clustering Algorithms](#clustering-algorithms)
+6. [Evaluation Metrics](#evaluation-metrics)
+7. [Usage](#usage)
+8. [Dependencies](#dependencies)
 
 ---
 
 ## Dataset
-We use the **SMS Spam Collection Dataset** from Kaggle:
+We use a small set of Wikipedia articles:
 
-- **Source:** [SMS Spam Collection Dataset](https://raw.githubusercontent.com/mohitgupta-omg/Kaggle-SMS-Spam-Collection-Dataset-/master/spam.csv)
-- **Description:** Contains 5,574 SMS messages labeled as `ham` (non-spam) or `spam`.
-- **Columns used:** 
-  - `label` (target: ham/spam)
-  - `text` (raw SMS content)
+```text
+Data Science, Artificial Intelligence, Machine Learning,
+European Central Bank, Bank, Financial Technology,
+International Monetary Fund, Basketball, Swimming, Tennis
+````
+
+* Articles are fetched using the `wikipedia` Python library.
+* Preprocessing includes lowercase conversion, punctuation removal, stop word removal, and lemmatization using `spaCy`.
 
 ---
 
 ## Data Preprocessing
-- Dropped unnecessary columns (`Unnamed: 2,3,4`).
-- Renamed remaining columns to `label` and `text`.
-- Text cleaning:
-  - Removed non-alphabetic characters
-  - Converted to lowercase
-  - Removed stopwords
-  - Lemmatized words using `WordNetLemmatizer`
 
-```python
-data['clean'] = data['text'].apply(clean_text)
-````
+1. **Text cleaning & normalization:**
 
----
+   * Remove numbers and punctuation
+   * Convert text to lowercase
+   * Lemmatization and stop word removal
+2. **Feature extraction:**
 
-## Feature Engineering
-
-1. **TF-IDF Features:**
-
-   * **Word-level:** 1-2 grams
-   * **Character-level:** 2-4 grams
-2. **Meta-features:** Custom features capturing characteristics common in spam messages:
-
-   * Message length
-   * Number of digits
-   * Number of punctuations
-   * Number of ALL CAPS words
-   * Presence of URLs
-   * Occurrences of the word `free`
-
-```python
-class MetaFeatures(BaseEstimator, TransformerMixin):
-    ...
-```
-
-3. **Feature Union:** Combines word TF-IDF, char TF-IDF, and meta-features into a single feature matrix.
+   * TF-IDF vectorization (`sklearn.TfidfVectorizer`)
+   * Sentence embeddings using **Sentence-BERT** (`sentence-transformers`)
 
 ---
 
-## Base Learners
+## Approach 1: Silhouette-Driven Clustering
 
-The stacking ensemble uses the following base classifiers:
+* **Goal:** Test multiple clustering algorithms and hyperparameters to maximize silhouette score.
 
-| Model                        | Notes                                                  |
-| ---------------------------- | ------------------------------------------------------ |
-| Multinomial Naive Bayes (NB) | Simple probabilistic classifier                        |
-| XGBoost (XGB)                | Gradient boosting with handling for imbalanced classes |
-| LightGBM (LGBM)              | Gradient boosting, class balanced                      |
-| Logistic Regression (LR)     | Regularized linear model                               |
-| Random Forest (RF)           | Ensemble of decision trees                             |
+* **Dimensionality reduction:** UMAP applied to embeddings for better clustering.
 
----
+* **Algorithms tested:**
 
-## Stacking Ensemble
+  * KMeans
+  * Agglomerative Clustering
+  * DBSCAN, HDBSCAN, OPTICS
+  * MeanShift
+  * Affinity Propagation
+  * Spectral Clustering
+  * Gaussian Mixture
 
-* Base learners: NB, XGB, LGBM, LR, RF
-* Meta-model: XGBoost
-* 5-fold cross-validation
-* Final predictions are generated using the meta-model over base learners’ outputs
+* **Meta-process:**
 
-```python
-stack = StackingClassifier(
-    estimators=estimators,
-    final_estimator=XGBClassifier(...),
-    cv=5,
-    n_jobs=-1,
-    passthrough=False
-)
-```
+  1. Fit each algorithm with different hyperparameters
+  2. Evaluate with silhouette score, Calinski-Harabasz score, and Davies-Bouldin index
+  3. Select the best performing model
+
+* **Visualization:** Barplot of silhouette scores for all algorithms.
 
 ---
 
-## Pipeline & Hyperparameter Tuning
+## Approach 2: Best Possible Clustering
 
-* **Pipeline Steps:**
+* Focused methods for high-quality clustering:
 
-  1. `FeatureUnion` for TF-IDF + meta-features
-  2. `SelectKBest` for top 3,000 features based on `chi2`
-  3. `StackingClassifier` for ensemble learning
+  1. **Agglomerative Clustering with TF-IDF vectors**
 
-* **GridSearchCV:** Tunes hyperparameters for base learners
+     * Tested linkage methods: `ward`, `single`, `complete`, `average`
+     * Evaluated silhouette score for different `k` clusters
+  2. **K-Means with Sentence-BERT embeddings**
 
-```python
-param_grid = {
-    'clf__nb__alpha': [0.5, 1.0],
-    'clf__lr__C': [0.1, 1.0, 10.0],
-    'clf__rf__n_estimators': [100, 150],
-    'clf__xgb__scale_pos_weight': [3, 5, 7],
-}
-```
+     * Embeddings: `paraphrase-MiniLM-L6-v2` and `all-MiniLM-L6-v2`
+     * Tested cluster counts from 2–10 and initializations (`k-means++`, `random`)
+     * Selected best model based on silhouette score
+
+* **Output:** Cluster assignments for each article with best hyperparameters.
 
 ---
 
-## Evaluation
+## Clustering Algorithms
 
-* Metrics reported: **F1-score (macro)**, **precision**, **recall**
-* Confusion matrix displayed for model performance
+| Algorithm                 | Notes                                           |
+| ------------------------- | ----------------------------------------------- |
+| KMeans                    | Centroid-based clustering                       |
+| Agglomerative Clustering  | Hierarchical clustering with different linkages |
+| DBSCAN / HDBSCAN / OPTICS | Density-based clustering                        |
+| MeanShift                 | Mode-seeking clustering                         |
+| AffinityPropagation       | Message-passing clustering                      |
+| SpectralClustering        | Graph-based clustering                          |
+| GaussianMixture           | Probabilistic model-based clustering            |
 
-```python
-print(classification_report(y_test, y_pred))
-print(confusion_matrix(y_test, y_pred))
-```
+---
 
-* The model handles class imbalance using `class_weight` in some base learners and `scale_pos_weight` in XGBoost.
+## Evaluation Metrics
+
+* **Silhouette Score:** Measures cohesion vs separation of clusters (primary metric)
+* **Calinski-Harabasz Index:** Ratio of between-cluster variance to within-cluster variance
+* **Davies-Bouldin Index:** Average similarity between each cluster and its most similar one (lower is better)
 
 ---
 
 ## Usage
 
-1. Clone the repository.
-2. Install dependencies:
+1. Install dependencies:
 
-   ```bash
-   pip install pandas numpy scikit-learn xgboost lightgbm nltk
-   ```
-3. Run the script:
+```bash
+pip install wikipedia spacy sentence-transformers umap-learn hdbscan matplotlib seaborn scikit-learn
+python -m spacy download en_core_web_sm
+```
 
-   ```bash
-   python spam_detection.py
-   ```
+2. Run the script for Approach 1 or Approach 2.
+3. The output includes:
+
+   * Best cluster assignments for each article
+   * Silhouette scores
+   * Visualization of clustering performance
 
 ---
 
 ## Dependencies
 
 * Python >= 3.8
-* pandas
-* numpy
+* pandas, numpy, re
 * scikit-learn
-* xgboost
-* lightgbm
-* nltk
-
-**NLTK Data:**
-
-```python
-nltk.download('stopwords')
-nltk.download('wordnet')
-```
+* sentence-transformers
+* spacy
+* wikipedia
+* umap-learn
+* hdbscan
+* matplotlib, seaborn
+* scipy (for dendrograms and linkage)
 
 ---
 
 ## Notes
 
-* The stacking ensemble with meta-features improves spam detection compared to using only TF-IDF.
-* The meta-features are particularly effective at capturing patterns unique to spam messages (e.g., ALL CAPS words, URLs, "free").
+* Using embeddings with UMAP often improves clustering quality over raw TF-IDF vectors.
+* Silhouette score is used to select optimal hyperparameters and cluster count.
+* Both approaches demonstrate different strategies: exhaustive search vs focused optimization.
 
 ---
 
 ## Author
 
-Reihane Montazeri – Machine Learning & Data Science Enthusiast
+Reihan – Data Science & NLP Enthusiast
+
 
