@@ -184,5 +184,3 @@ nltk.download('wordnet')
 
 Reihan – Machine Learning & Data Science Enthusiast
 
-```
-
